@@ -162,7 +162,7 @@ function isActive(array $weekStatus, string $vendorKey): bool {
     <header>
       <img src="Assets/wappen-stockstadt.gif" alt="Wappen Stockstadt" title="Wappen Stockstadt">
       <div>
-        <h1>Übersicht – Kalenderwoche <span class="pill">KW <?= htmlspecialchars($displayWeek) ?></span> <span class="muted">/ <?= htmlspecialchars($displayYear) ?></span></h1>
+        <h1>Übersicht Wochenmarkt Stockstadt $1</h1>
         <div class="muted">Montag bis Sonntag der ausgewählten Woche</div>
       </div>
     </header>
@@ -202,7 +202,7 @@ function isActive(array $weekStatus, string $vendorKey): bool {
     </section>
 
     <footer>
-      <p class="muted">Persistenz in <code>data/status.json</code>. Bilder unter <code>/Assets</code>. Deaktivierte Anbieter werden nicht angezeigt.</p>
+      <p class="muted">Es werden nur die Anbieter des dieswöchigen Wochenmarktes angezeigt.</p>
     </footer>
   </div>
 </body>
