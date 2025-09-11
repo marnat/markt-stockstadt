@@ -1,15 +1,13 @@
 <?php
-// index.php – Wochenfunktion + QR/UID-Aktivierung pro Anbieter (KW-basiert)
-// Charset & Zeitzone
+// index.php – Wochenfunktion + QR/UID Aktivierung pro Anbieter (ON/OFF, KW-basiert)
 header('Content-Type: text/html; charset=utf-8');
 date_default_timezone_set('Europe/Berlin');
 
 // =============================
 // Anbieter-Konfiguration (UIDs)
 // =============================
-// Jede UID steckt in einem **statischen** QR-Code des Anbieters. Beim Scannen wird
-// z.B. https://deine-domain.tld/index.php?uid=UID_METZGER aufgerufen.
-// -> Die UID wird auf einen Anbieter gemappt und dessen Status für die *aktuelle* KW getoggelt.
+// Jede UID steckt in einem **statischen** QR-Code des Anbieters.
+// Aufruf: index.php?uid=UID_METZGER&action=on|off
 $vendors = [
   'metzger' => [
     'name' => 'Metzger',
@@ -28,7 +26,7 @@ $vendors = [
   ],
 ];
 
-// Hilfs-Map von UID -> Vendor-Key
+// Hilfs-Map UID -> Vendor-Key
 $uidToVendor = [];
 foreach ($vendors as $k => $v) { $uidToVendor[$v['uid']] = $k; }
 
@@ -70,7 +68,7 @@ function weekUrl($w, $y): string { return '?week=' . rawurlencode((string)$w) . 
 // =============================
 // Persistenz der Aktivierung (pro *aktueller* KW)
 // =============================
-// Struktur der Datei data/status.json
+// Struktur: data/status.json
 // {
 //   "2025-37": { "metzger": true, "baecker": false, "gemuese": true }
 // }
@@ -99,26 +97,30 @@ $currentKey = $currentIsoYear . '-' . $currentIsoWeek; // z.B. 2025-37
 if (!isset($status[$currentKey])) { $status[$currentKey] = []; }
 
 // =============================
-// QR-Scan: UID verarbeiten -> Toggle für aktuelle KW
+// QR-Scan: UID + ACTION (on/off) -> Setzen für aktuelle KW
 // =============================
-$flash = null;
-if (isset($_GET['uid']) && is_string($_GET['uid'])) {
+$flash = null; // bewusst NICHT anzeigen – nur intern nutzbar; bleibt hier für Logging/Hooks
+if (isset($_GET['uid'], $_GET['action']) && is_string($_GET['uid']) && is_string($_GET['action'])) {
   $uid = trim($_GET['uid']);
-  if (isset($uidToVendor[$uid])) {
+  $action = strtolower(trim($_GET['action']));
+  if (isset($uidToVendor[$uid]) && in_array($action, ['on','off'], true)) {
     $vendorKey = $uidToVendor[$uid];
-    $current = isset($status[$currentKey][$vendorKey]) ? (bool)$status[$currentKey][$vendorKey] : false;
-    $status[$currentKey][$vendorKey] = !$current; // Toggle
+    $status[$currentKey][$vendorKey] = ($action === 'on');
     saveStatus($dataFile, $status);
-    $stateText = $status[$currentKey][$vendorKey] ? 'aktiviert' : 'deaktiviert';
-    $flash = sprintf('%s wurde für KW %d/%d %s.', $vendors[$vendorKey]['name'], $currentIsoWeek, $currentIsoYear, $stateText);
-  } else {
-    $flash = 'Unbekannte UID – Anbieter konnte nicht zugeordnet werden.';
+    // $flash = sprintf('%s wurde %s.', $vendors[$vendorKey]['name'], $action === 'on' ? 'aktiviert' : 'deaktiviert');
   }
 }
 
-// Status für die *anzeigte* Woche auslesen
+// Status für die *anzeigte* Woche
 $displayKey = $displayYear . '-' . $displayWeek;
 $weekStatus = $status[$displayKey] ?? [];
+
+// =============================
+// Rendering-Helfer
+// =============================
+function isActive(array $weekStatus, string $vendorKey): bool {
+  return isset($weekStatus[$vendorKey]) ? (bool)$weekStatus[$vendorKey] : false;
+}
 ?>
 <!doctype html>
 <html lang="de">
@@ -128,51 +130,31 @@ $weekStatus = $status[$displayKey] ?? [];
   <title>Übersicht – KW <?= htmlspecialchars($displayWeek) ?> / <?= htmlspecialchars($displayYear) ?></title>
   <style>
     :root {
-      --bg: #0f172a;       /* slate-900 */
-      --card: #111827;     /* gray-900 */
-      --muted: #94a3b8;    /* slate-400 */
-      --text: #e5e7eb;     /* gray-200 */
-      --accent: #22d3ee;   /* cyan-400 */
-      --accent-2: #60a5fa; /* blue-400 */
-      --good: #10b981;     /* green-500 */
-      --bad: #ef4444;      /* red-500 */
-      --warn:#f59e0b;      /* amber-500 */
+      --bg: #0f172a; --card: #111827; --muted: #94a3b8; --text: #e5e7eb; --accent: #22d3ee; --accent-2: #60a5fa; --good: #10b981; --bad:#ef4444;
     }
     * { box-sizing: border-box; }
-    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; background: var(--bg); color: var(--text); }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans"; background: var(--bg); color: var(--text); }
     .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
     header { display:flex; align-items:center; gap:16px; margin-bottom: 20px; }
     header img { height: 56px; width: auto; border-radius: 8px; background: #fff; padding: 6px; }
     h1 { margin:0; font-size: clamp(1.4rem, 2.5vw, 2rem); line-height: 1.2; }
     .muted { color: var(--muted); }
-
-    .flash { margin: 10px 0 0; padding: 10px 12px; background: #0b1220; border: 1px solid #1f2937; border-radius: 10px; }
-
     .nav { display:flex; align-items:center; justify-content: space-between; gap:12px; margin: 18px 0 24px; }
     .btn { display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius: 10px; border: 1px solid #1f2937; background: linear-gradient(180deg,#1f2937,#111827); color: var(--text); text-decoration:none; }
     .btn:hover { border-color:#374151; filter: brightness(1.05); }
     .pill { display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; background:#1f2937; color: var(--accent); font-weight:600; }
-
     .week { display:grid; grid-template-columns: repeat(7, 1fr); gap:10px; }
     .day { background: var(--card); border: 1px solid #1f2937; border-radius: 12px; padding: 10px; min-height: 90px; }
     .day.today { outline: 2px solid var(--accent-2); }
     .day h3 { margin:0 0 8px; font-size: 0.95rem; display:flex; align-items:center; justify-content: space-between; }
     .day .date { color: var(--muted); font-size: 0.85rem; }
-
     .grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:16px; margin-top: 28px; }
     .card { background: var(--card); border: 1px solid #1f2937; border-radius: 14px; padding: 16px; position: relative; }
     .card h2 { margin:0 0 12px; font-size: 1.1rem; }
     .media { display:flex; align-items:center; justify-content:center; background:#0b1220; border-radius: 12px; padding: 12px; height: 180px; }
     .media img { max-width: 100%; max-height: 160px; object-fit: contain; }
-
     .status { position: absolute; top: 14px; right: 14px; padding: 6px 10px; border-radius: 999px; font-weight: 600; font-size: 0.85rem; }
     .on  { background: rgba(16,185,129,.15); color: var(--good); border: 1px solid rgba(16,185,129,.35); }
-    .off { background: rgba(239,68,68,.15); color: var(--bad);  border: 1px solid rgba(239,68,68,.35); }
-
-    footer { margin-top: 28px; color: var(--muted); font-size: 0.9rem; }
-
-    @media (max-width: 900px) { .week { grid-template-columns: repeat(3, 1fr); } }
-    @media (max-width: 600px) { .week { grid-template-columns: repeat(2, 1fr); } .grid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -182,7 +164,6 @@ $weekStatus = $status[$displayKey] ?? [];
       <div>
         <h1>Übersicht – Kalenderwoche <span class="pill">KW <?= htmlspecialchars($displayWeek) ?></span> <span class="muted">/ <?= htmlspecialchars($displayYear) ?></span></h1>
         <div class="muted">Montag bis Sonntag der ausgewählten Woche</div>
-        <?php if ($flash): ?><div class="flash"><?= htmlspecialchars($flash) ?></div><?php endif; ?>
       </div>
     </header>
 
@@ -201,34 +182,27 @@ $weekStatus = $status[$displayKey] ?? [];
             <span><?= htmlspecialchars($d['name']) ?></span>
             <span class="date"><?= htmlspecialchars($d['date']) ?></span>
           </h3>
-          <!-- Platz für tagesbezogene Inhalte -->
         </article>
       <?php endforeach; ?>
     </section>
 
     <section class="grid" aria-label="Anbieter">
       <?php foreach ($vendors as $key => $v):
-        $active = isset($weekStatus[$key]) ? (bool)$weekStatus[$key] : false;
+        if (!isActive($weekStatus, $key)) continue; // Deaktivierte Anbieter NICHT anzeigen
       ?>
         <div class="card">
-          <div class="status <?= $active ? 'on' : 'off' ?>"><?= $active ? 'Aktiv (diese KW)' : 'Inaktiv' ?></div>
+          <div class="status on">Aktiv (diese KW)</div>
           <h2><?= htmlspecialchars($v['name']) ?></h2>
           <div class="media">
             <img src="<?= htmlspecialchars($v['image']) ?>" alt="<?= htmlspecialchars($v['name']) ?>" title="<?= htmlspecialchars($v['name']) ?>">
           </div>
-          <p class="muted">Status bezieht sich auf KW <?= htmlspecialchars($displayWeek) ?>/<?= htmlspecialchars($displayYear) ?>.</p>
-          <details class="muted">
-            <summary>QR/UID-Hinweis</summary>
-            <p>Diesen Anbieter aktivieren/deaktivieren, indem der Anbieter seinen <strong>statischen QR-Code</strong> scannt, der auf <code>?uid=...</code> verweist. Der Scan toggelt den Status für die <em>aktuelle</em> Kalenderwoche.</p>
-            <p>Beispiel-URL: <code>index.php?uid=<?= htmlspecialchars($v['uid']) ?></code></p>
-          </details>
+          <p class="muted">Aktiv für KW <?= htmlspecialchars($displayWeek) ?>/<?= htmlspecialchars($displayYear) ?>.</p>
         </div>
       <?php endforeach; ?>
     </section>
 
     <footer>
-      <p>Hinweis: Bilder werden relativ aus <code>/Assets</code> geladen. Achte auf exakte Groß-/Kleinschreibung der Dateinamen (Linux-Server sind case-sensitive).</p>
-      <p class="muted">Persistenz: <code>data/status.json</code> speichert pro ISO-KW die Aktivierungen.</p>
+      <p class="muted">Persistenz in <code>data/status.json</code>. Bilder unter <code>/Assets</code>. Deaktivierte Anbieter werden nicht angezeigt.</p>
     </footer>
   </div>
 </body>
