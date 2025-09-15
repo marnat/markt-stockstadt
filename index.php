@@ -12,17 +12,17 @@ $vendors = [
   'metzger' => [
     'name' => 'Metzger',
     'uid'  => 'UID_METZGER', // TODO: echte UID einsetzen
-    'image'=> 'Assets/Metzger.png',
+    'image'=> 'Assets/butcher_text.png',
   ],
   'baecker' => [
     'name' => 'Bäcker',
     'uid'  => 'UID_BAECKER', // TODO: echte UID einsetzen
-    'image'=> 'Assets/Bäcker.png',
+    'image'=> 'Assets/baker_text.png',
   ],
   'gemuese' => [
     'name' => 'Gemüse',
     'uid'  => 'UID_GEMUESE', // TODO: echte UID einsetzen
-    'image'=> 'Assets/Gemüse.png',
+    'image'=> 'Assets/green_text.png',
   ],
 ];
 
